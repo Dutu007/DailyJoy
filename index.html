@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>今日小确幸 (DailyJoy)</title>
+    
+    <!-- Tailwind CSS (快速样式) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 核心 CSS -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- 图标库 (Phosphor Icons) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Canvas 树木生成器 -->
+    <script src="js/treeGenerator.js"></script>
+
+    <!-- Vue 3 (前端逻辑) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-gray-100 flex justify-center h-screen overflow-hidden">
+    <!-- 模拟手机/App外壳结构 -->
+    <div id="app" class="w-full max-w-md bg-white h-full relative flex flex-col shadow-2xl overflow-hidden">
+        
+        <!-- 登录页面 -->
+        <div v-if="!isLoggedIn" class="w-full h-full flex flex-col justify-center px-8 bg-brand-50 absolute inset-0 z-50 animate-fade-in">
+            <div class="text-center mb-10">
+                <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-sm">🌱</div>
+                <h1 class="text-3xl font-bold text-gray-800">DailyJoy</h1>
+                <p class="text-gray-500 mt-2">登录开启你的治愈之旅</p>
+            </div>
+            <div class="space-y-4">
+                <input v-model="authForm.email" type="email" placeholder="邮箱" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors">
+                <input v-model="authForm.password" type="password" placeholder="密码" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors" @keyup.enter="handleAuth">
+                <button @click="handleAuth" :disabled="isLoading" class="w-full bg-brand-500 text-white font-bold py-3 rounded-xl hover:bg-brand-600 transition-colors shadow-md shadow-brand-500/30 flex justify-center items-center disabled:opacity-70">
+                    <i v-if="isLoading" class="ph ph-spinner animate-spin mr-2 text-xl"></i>
+                    {{ isRegistering ? '注册并登录' : '登录' }}
+                </button>
+            </div>
+            <div class="mt-6 text-center">
+                <button @click="isRegistering = !isRegistering" class="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors">
+                    {{ isRegistering ? '已有账号？直接登录' : '没有账号？快速注册' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- 主应用页面 (登录后显示) -->
+        <div v-else class="flex flex-col h-full w-full animate-fade-in relative">
+            <!-- Header -->
+            <header class="pt-12 pb-4 px-6 bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">{{ currentDateStr }}</h1>
+                    <p class="text-sm text-gray-500 mt-1">记录你的每一份小确幸 🌱</p>
+                </div>
+                <div @click="handleLogout" class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold cursor-pointer hover:bg-brand-200 transition-colors shadow-sm" title="退出登录">
+                    <i class="ph ph-sign-out text-xl"></i>
+                </div>
+            </header>
+
+        <!-- Main Content Scrollable Area -->
+        <main class="flex-1 overflow-y-auto p-6 pb-24 hide-scrollbar">
+            
+            <!-- Tab: 首页 (Home) -->
+            <div v-show="currentTab === 'home'" class="space-y-8 animate-fade-in">
+                
+                <!-- 模块 1: 今日心情 -->
+                <section>
+                    <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <i class="ph-fill ph-smiley text-xl text-yellow-500 mr-2"></i> 今日心情
+                    </h2>
+                    <div class="grid grid-cols-5 gap-3">
+                        <button 
+                            v-for="mood in moods" 
+                            :key="mood.id"
+                            @click="selectMood(mood.id)"
+                            :class="[
+                                'flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300',
+                                selectedMood === mood.id ? mood.activeClass + ' scale-110 shadow-md' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                            ]"
+                        >
+                            <span class="text-2xl mb-1">{{ mood.emoji }}</span>
+                            <span class="text-xs font-medium" :class="selectedMood === mood.id ? mood.textColor : ''">{{ mood.label }}</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 模块 2: 生活打卡 -->
+                <section>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="ph-fill ph-check-circle text-xl text-brand-500 mr-2"></i> 习惯打卡
+                        </h2>
+                        <span class="text-sm text-gray-400">{{ completedHabitsCount }}/{{ todayHabits.length }}</span>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div 
+                            v-for="habit in todayHabits" 
+                            :key="habit.id"
+                            @click="toggleHabit(habit.id)"
+                            :class="[
+                                'flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border',
+                                habit.completed ? 'bg-brand-50 border-brand-100' : 'bg-white border-gray-100 shadow-sm hover:border-brand-100'
+                            ]"
+                        >
+                            <div 
+                                :class="[
+                                    'w-6 h-6 rounded-full flex items-center justify-center mr-4 transition-colors',
+                                    habit.completed ? 'bg-brand-500 text-white' : 'border-2 border-gray-300'
+                                ]"
+                            >
+                                <i v-if="habit.completed" class="ph-bold ph-check text-sm"></i>
+                            </div>
+                            <span :class="['text-base flex-1 transition-colors', habit.completed ? 'text-brand-700 line-through opacity-70' : 'text-gray-700']">
+                                {{ habit.name }}
+                            </span>
+                            <span class="text-xl">{{ habit.icon }}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 添加新习惯区域 -->
+                    <div v-if="isAddingHabit" class="mt-4 animate-fade-in bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                        <div class="flex gap-2 mb-3">
+                            <input v-model="newHabitName" type="text" placeholder="如: 睡前冥想" class="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-brand-500">
+                            <input v-model="newHabitIcon" type="text" placeholder="🧘" class="w-12 px-2 py-2 rounded-xl border border-gray-200 text-sm text-center focus:outline-none focus:border-brand-500" maxlength="2">
+                        </div>
+                        
+                        <!-- 频率设置 -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-medium text-gray-500 mb-2">打卡频率</label>
+                            <div class="flex gap-2 bg-gray-50 p-1 rounded-xl w-fit mb-3">
+                                <button @click="newHabitFrequencyType = 'daily'" :class="['px-3 py-1 text-xs rounded-lg transition-colors', newHabitFrequencyType === 'daily' ? 'bg-white shadow-sm text-brand-600 font-medium' : 'text-gray-500']">每天</button>
+                                <button @click="newHabitFrequencyType = 'weekly'" :class="['px-3 py-1 text-xs rounded-lg transition-colors', newHabitFrequencyType === 'weekly' ? 'bg-white shadow-sm text-brand-600 font-medium' : 'text-gray-500']">按周几</button>
+                                <button @click="newHabitFrequencyType = 'interval'" :class="['px-3 py-1 text-xs rounded-lg transition-colors', newHabitFrequencyType === 'interval' ? 'bg-white shadow-sm text-brand-600 font-medium' : 'text-gray-500']">按间隔</button>
+                            </div>
+
+                            <!-- 按周几 -->
+                            <div v-if="newHabitFrequencyType === 'weekly'" class="flex gap-1 justify-between">
+                                <button v-for="(day, index) in ['日','一','二','三','四','五','六']" :key="index"
+                                        @click="toggleNewHabitWeekDay(index)"
+                                        :class="['w-8 h-8 rounded-full text-xs transition-colors flex items-center justify-center', newHabitWeekDays.includes(index) ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500']">
+                                    {{ day }}
+                                </button>
+                            </div>
+
+                            <!-- 按间隔 -->
+                            <div v-if="newHabitFrequencyType === 'interval'" class="flex items-center gap-2 text-sm text-gray-600">
+                                每 <input type="number" v-model.number="newHabitIntervalDays" min="1" max="30" class="w-12 px-2 py-1 rounded-lg border border-gray-200 text-center focus:outline-none focus:border-brand-500"> 天一次
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-2">
+                            <button @click="cancelAddHabit" class="px-4 py-2 rounded-xl text-gray-500 hover:bg-gray-100 text-sm font-medium transition-colors">
+                                取消
+                            </button>
+                            <button @click="submitNewHabit" :disabled="!newHabitName || (newHabitFrequencyType === 'weekly' && newHabitWeekDays.length === 0)" class="px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-medium hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                确定添加
+                            </button>
+                        </div>
+                    </div>
+                    <button v-else @click="isAddingHabit = true" class="w-full mt-4 py-3 rounded-xl border border-dashed border-gray-300 text-gray-400 hover:text-brand-500 hover:border-brand-300 transition-colors flex items-center justify-center text-sm">
+                        <i class="ph-bold ph-plus mr-1"></i> 添加新习惯
+                    </button>
+                </section>
+
+            </div>
+
+            <!-- Tab: 每日一树与森林 (Tree/Forest) -->
+            <div v-show="currentTab === 'tree'" class="space-y-6 animate-fade-in flex flex-col h-full relative bg-gray-50 pb-10">
+                
+                <!-- 顶部切换开关 -->
+                <div class="flex justify-center mt-2 z-10">
+                    <div class="bg-white p-1 rounded-full shadow-sm flex text-sm font-medium border border-gray-100">
+                        <button @click="treeViewMode = 'today'" :class="['px-6 py-2 rounded-full transition-colors', treeViewMode === 'today' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50']">今日之树</button>
+                        <button @click="treeViewMode = 'forest'" :class="['px-6 py-2 rounded-full transition-colors', treeViewMode === 'forest' ? 'bg-brand-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50']">我的森林</button>
+                    </div>
+                </div>
+
+                <!-- 今日之树 -->
+                <div v-show="treeViewMode === 'today'" class="flex-1 flex flex-col items-center justify-center relative w-full h-full pb-10">
+                    <div class="text-center mb-8 z-10">
+                        <h2 class="text-2xl font-bold text-gray-800 drop-shadow-md">
+                            {{ selectedMood ? moodLabels[selectedMood] + '之树' : '等待发芽的种子' }}
+                        </h2>
+                        <p class="text-gray-500 text-sm mt-2">
+                            {{ completedHabitsCount === 0 ? '完成打卡，给树浇水吧 🌱' : `已获得 ${completedHabitsCount} 滴养分 💧` }}
+                        </p>
+                    </div>
+                    
+                    <div class="relative w-full max-w-[300px] aspect-square">
+                        <canvas id="dailyTreeCanvas" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+
+                <!-- 我的森林 (月度视图) -->
+                <div v-show="treeViewMode === 'forest'" class="flex-1 overflow-y-auto px-2 hide-scrollbar">
+                    <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-xl font-bold text-gray-800">{{ forestYearMonth }}</h2>
+                            <div class="flex gap-2">
+                                <button @click="changeForestMonth(-1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-left"></i></button>
+                                <button @click="changeForestMonth(1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-right"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-4 gap-y-6 gap-x-2">
+                            <div v-for="day in forestDays" :key="day.dateStr" class="flex flex-col items-center">
+                                <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-1 overflow-hidden" :class="day.hasRecord ? 'bg-transparent' : 'bg-gray-50 border border-gray-100'">
+                                    <canvas :id="'forest-tree-' + day.dateStr" class="w-full h-full" v-if="day.hasRecord"></canvas>
+                                    <span v-else class="text-xs text-gray-300">空</span>
+                                </div>
+                                <span class="text-[10px] text-gray-500 font-medium">{{ day.dayNum }}日</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: 心情日历 (Mood Calendar) -->
+            <div v-show="currentTab === 'calendar'" class="space-y-6 animate-fade-in pb-10">
+                <!-- 月度心情日历 -->
+                <section class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-800">{{ currentYearMonth }}</h2>
+                        <div class="flex gap-2">
+                            <button @click="changeMonth(-1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-left"></i></button>
+                            <button @click="changeMonth(1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-right"></i></button>
+                        </div>
+                    </div>
+                    <!-- 日历网格 -->
+                    <div class="grid grid-cols-7 gap-2 text-center text-xs text-gray-400 mb-2">
+                        <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-2">
+                        <div v-for="(day, index) in calendarDays" :key="index" class="aspect-square flex items-center justify-center">
+                            <button v-if="day" 
+                                 @click="selectCalendarDate(day.dateStr)"
+                                 :class="[
+                                     'w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all cursor-pointer hover:ring-2 hover:ring-brand-200',
+                                     day.isToday ? 'font-bold' : '',
+                                     selectedCalendarDate === day.dateStr ? 'ring-2 ring-brand-500 ring-offset-1' : '',
+                                     day.moodColor ? day.moodColor : 'bg-gray-50 text-gray-600'
+                                 ]"
+                                 :title="day.dateStr">
+                                {{ day.date }}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex flex-wrap gap-2 justify-center border-t border-gray-50 pt-4">
+                        <span class="text-[10px] flex items-center text-gray-500"><span class="w-2 h-2 rounded-full bg-green-400 mr-1"></span>开心</span>
+                        <span class="text-[10px] flex items-center text-gray-500"><span class="w-2 h-2 rounded-full bg-blue-400 mr-1"></span>平静</span>
+                        <span class="text-[10px] flex items-center text-gray-500"><span class="w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>焦虑</span>
+                        <span class="text-[10px] flex items-center text-gray-500"><span class="w-2 h-2 rounded-full bg-purple-400 mr-1"></span>难过</span>
+                        <span class="text-[10px] flex items-center text-gray-500"><span class="w-2 h-2 rounded-full bg-red-400 mr-1"></span>生气</span>
+                    </div>
+                </section>
+
+                <!-- 日记展示与输入 -->
+                <section v-if="selectedCalendarDate" class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mt-6 animate-fade-in">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-md font-bold text-gray-800">{{ formatSelectedCalendarDate }} 日记</h3>
+                        <span v-if="isSavingDiary" class="text-xs text-gray-400 flex items-center"><i class="ph ph-spinner animate-spin mr-1"></i>保存中...</span>
+                        <span v-else-if="diarySaved" class="text-xs text-green-500 flex items-center"><i class="ph-bold ph-check mr-1"></i>已保存</span>
+                    </div>
+                    <textarea 
+                        v-model="currentDiaryText" 
+                        @input="handleDiaryInput"
+                        placeholder="记录今天发生的小确幸..." 
+                        class="w-full h-32 p-3 bg-gray-50 border-none rounded-xl text-sm text-gray-700 focus:ring-1 focus:ring-brand-500 resize-none outline-none"
+                    ></textarea>
+                </section>
+            </div>
+
+            <!-- Tab: 日程安排 (Schedule) -->
+            <div v-show="currentTab === 'schedule'" class="space-y-6 animate-fade-in pb-10">
+                <!-- 顶部日期选择器 (固定为月历网格) -->
+                <section class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold text-gray-800">
+                            {{ scheduleCalendarYearMonth }}
+                        </h2>
+                        <div class="flex gap-2">
+                            <button @click="changeScheduleMonth(-1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-left"></i></button>
+                            <button @click="changeScheduleMonth(1)" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 hover:bg-gray-100"><i class="ph-bold ph-caret-right"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- 完整月历网格 -->
+                    <div class="animate-fade-in">
+                        <div class="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-2">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            <div v-for="(day, index) in scheduleCalendarGrid" :key="index" class="min-h-[4rem] flex flex-col border border-gray-50 rounded-xl overflow-hidden bg-gray-50/30">
+                                <button v-if="day" 
+                                     @click="selectSpecificScheduleDate(day.dateStr)"
+                                     :class="[
+                                         'w-full h-full flex flex-col p-1 transition-all text-left relative hover:bg-gray-100',
+                                         selectedScheduleDate === day.dateStr ? 'bg-brand-50 border-brand-300 shadow-sm z-10' : '',
+                                     ]">
+                                    <!-- 日期数字 -->
+                                    <span :class="[
+                                        'text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full',
+                                        day.isToday ? 'bg-brand-500 text-white' : 'text-gray-600',
+                                        selectedScheduleDate === day.dateStr && !day.isToday ? 'text-brand-600 font-bold' : ''
+                                    ]">{{ day.date }}</span>
+                                    
+                                    <!-- 日程文字列表 -->
+                                    <div class="flex-1 w-full mt-1 flex flex-col gap-0.5 overflow-hidden">
+                                        <div v-for="(sch, i) in day.schedules" :key="i" 
+                                             class="text-[9px] leading-tight px-1 rounded bg-white border border-gray-100 text-gray-500 truncate w-full">
+                                            {{ sch.title }}
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 日程列表 (单日视图) -->
+                <section>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                            <i class="ph-fill ph-calendar-check text-xl text-brand-500 mr-2"></i> 
+                            {{ selectedScheduleDateStr }}
+                        </h2>
+                        <button @click="showAddSchedule = !showAddSchedule" class="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 hover:bg-brand-100 transition-colors">
+                            <i class="ph-bold ph-plus"></i>
+                        </button>
+                    </div>
+
+                    <!-- 快速添加日程输入框 -->
+                    <div v-if="showAddSchedule" class="mb-4 bg-white p-3 rounded-2xl border border-brand-200 shadow-sm animate-fade-in flex gap-2">
+                        <input type="date" v-model="newScheduleDate" class="text-xs bg-gray-50 border-none rounded-xl px-2 text-gray-600 focus:ring-0 w-28 hidden">
+                        <input type="text" v-model="newScheduleTitle" @keyup.enter="addSchedule" placeholder="记录新安排..." class="flex-1 text-sm border-none bg-transparent focus:ring-0 px-1 placeholder-gray-400">
+                        <button @click="addSchedule" :disabled="!newScheduleTitle.trim() || isAddingSchedule" class="w-8 h-8 rounded-xl bg-brand-500 text-white flex items-center justify-center disabled:opacity-50">
+                            <i v-if="isAddingSchedule" class="ph ph-spinner animate-spin"></i>
+                            <i v-else class="ph-bold ph-paper-plane-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- 视图: 单日列表 -->
+                    <div class="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm min-h-[10rem]">
+                        <div v-if="specificDaySchedules.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 pt-8 pb-4">
+                            <i class="ph ph-coffee text-4xl mb-2 text-gray-200"></i>
+                            <span class="text-sm">这一天很空闲，去放松一下吧</span>
+                        </div>
+                        <div v-else class="space-y-3">
+                            <div v-for="item in specificDaySchedules" :key="item.id" class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                                <button @click="toggleSchedule(item)" :class="['w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors', item.is_completed ? 'bg-brand-500 border-brand-500 text-white' : 'border-gray-300 bg-white']">
+                                    <i v-if="item.is_completed" class="ph-bold ph-check text-xs"></i>
+                                </button>
+                                <span :class="['text-base flex-1 break-all', item.is_completed ? 'text-gray-400 line-through' : 'text-gray-700']">{{ item.title }}</span>
+                                <button @click="deleteSchedule(item.id)" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph-fill ph-trash text-lg"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                </section>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="absolute bottom-0 w-full bg-white border-t border-gray-100 pb-safe pt-2 px-6 flex justify-around">
+            <button 
+                @click="currentTab = 'home'"
+                :class="['flex flex-col items-center p-2 transition-colors', currentTab === 'home' ? 'text-brand-600' : 'text-gray-400']"
+            >
+                <i :class="[currentTab === 'home' ? 'ph-fill' : 'ph', 'ph-check-square-offset text-2xl mb-1']"></i>
+                <span class="text-[10px] font-medium">打卡</span>
+            </button>
+            <button 
+                @click="currentTab = 'tree'"
+                :class="['flex flex-col items-center p-2 transition-colors', currentTab === 'tree' ? 'text-brand-600' : 'text-gray-400']"
+            >
+                <i :class="[currentTab === 'tree' ? 'ph-fill' : 'ph', 'ph-tree-evergreen text-2xl mb-1']"></i>
+                <span class="text-[10px] font-medium">树洞</span>
+            </button>
+            <button 
+                @click="currentTab = 'calendar'"
+                :class="['flex flex-col items-center p-2 transition-colors', currentTab === 'calendar' ? 'text-brand-600' : 'text-gray-400']"
+            >
+                <i :class="[currentTab === 'calendar' ? 'ph-fill' : 'ph', 'ph-calendar-heart text-2xl mb-1']"></i>
+                <span class="text-[10px] font-medium">日历</span>
+            </button>
+            <button 
+                @click="currentTab = 'schedule'"
+                :class="['flex flex-col items-center p-2 transition-colors', currentTab === 'schedule' ? 'text-brand-600' : 'text-gray-400']"
+            >
+                <i :class="[currentTab === 'schedule' ? 'ph-fill' : 'ph', 'ph-list-bullets text-2xl mb-1']"></i>
+                <span class="text-[10px] font-medium">日程</span>
+            </button>
+        </nav>
+        </div>
+    </div>
+
+    <!-- 数据库及鉴权 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/db.js"></script>
+    <!-- 核心 JS -->
+    <script src="js/app.js"></script>
+</body>
+</html>
