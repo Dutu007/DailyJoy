@@ -587,8 +587,8 @@ const app = createApp({
                         }
                     });
                     
-                    // Render mini trees in nextTick
-                    Vue.nextTick(() => {
+                    // Render mini trees with a small delay to ensure DOM is ready
+                    setTimeout(() => {
                         if (!window.TreeGenerator) return;
                         days.forEach(day => {
                             if (day.hasRecord) {
@@ -603,7 +603,7 @@ const app = createApp({
                                 }
                             }
                         });
-                    });
+                    }, 100);
 
                 } catch (error) {
                     console.error("加载森林数据失败:", error);
@@ -625,7 +625,7 @@ const app = createApp({
                     // 添加 setTimeout 确保 DOM 已经完全切换并渲染完成
                     setTimeout(() => {
                         initForest(currentForestDate.value.getFullYear(), currentForestDate.value.getMonth() + 1);
-                    }, 50);
+                    }, 80);
                 }
             }
         });
