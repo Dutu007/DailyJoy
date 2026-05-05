@@ -531,6 +531,17 @@ const app = createApp({
             'sad': '难过',
             'angry': '生气'
         };
+        
+        const getMoodEmoji = (mood) => {
+            const emojiMap = {
+                'happy': '😊',
+                'calm': '😌',
+                'anxious': '😰',
+                'sad': '😢',
+                'angry': '😡'
+            };
+            return emojiMap[mood] || '🌱';
+        };
 
         const renderTodayTree = () => {
             const canvas = document.getElementById('dailyTreeCanvas');
@@ -664,7 +675,7 @@ const app = createApp({
             currentYearMonth, calendarDays, changeMonth,
             selectedCalendarDate, currentDiaryText, isSavingDiary, diarySaved, formatSelectedCalendarDate, selectCalendarDate, handleDiaryInput,
             // 树与森林
-            treeViewMode, moodLabels, renderTodayTree,
+            treeViewMode, moodLabels, renderTodayTree, getMoodEmoji,
             forestDays, forestYearMonth, changeForestMonth
         };
     }
